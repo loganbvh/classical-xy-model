@@ -185,7 +185,7 @@ def calculate_observables(
         magnetization += M
         magnetization2 += M**2
         energy += calculate_E(phases, periodic=periodic)
-        ex, sx, ey, sy = calculate_stiffness(phases, periodic=periodic)
+        ex, sx, ey, sy = calculate_stiffness(phases)
         stiffness_x_e += ex
         stiffness_x_s2 += sx**2
         stiffness_y_e += ey
