@@ -257,7 +257,7 @@ def construct_wolff_cluster(
         return phases, visited
 
     S0 = np.exp(1j * phases[row, col])
-    S0_dot_r = (S0 / r0).real
+    S0_dot_r0 = (S0 / r0).real
 
     col_right, col_left, row_up, row_down = neighbors[row, col]
     bonds = np.array(
@@ -269,12 +269,12 @@ def construct_wolff_cluster(
             continue
 
         S = np.exp(1j * phases[i, j])
-        S_dot_r = (S / r0).real
+        S_dot_r0 = (S / r0).real
 
-        a = 2 / temperature * S0_dot_r * S_dot_r
+        a = 2 / temperature * S0_dot_r0 * S_dot_r0
         prob = (a < 0) * (1 - np.exp(a))
         if np.random.random() < prob:
-            S -= 2 * r0 * S_dot_r
+            S -= 2 * S_dot_r0 * r0
             phases[i, j] = np.angle(S)
             visited[i, j] = True
 
@@ -304,9 +304,10 @@ def run_wolff_step(
     row = np.random.randint(0, nrows)
     col = np.random.randint(0, ncols)
     S = np.exp(1j * phases[row, col])
-
     r0 = np.exp(1j * 2 * np.pi * np.random.random())
-    S -= 2 * r0 * (S / r0).real
+
+    S_dot_r0 = (S / r0).real
+    S -= 2 * S_dot_r0 * r0
     phases[row, col] = np.angle(S)
     visited[row, col] = True
 
