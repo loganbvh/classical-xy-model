@@ -39,7 +39,9 @@ class XYResult:
         return json_dict
 
     @staticmethod
-    def from_json(json_dict: Dict[str, Union[int, float, str, None]]) -> "XYResult":
+    def from_json(
+        json_dict: Dict[str, Union[int, float, str, UFloat, None]]
+    ) -> "XYResult":
         """Create an ``XYResult`` from a JSON-compatible dict"""
         kwargs = {}
         for field in dataclasses.fields(XYResult):
