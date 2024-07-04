@@ -1,5 +1,6 @@
 import dataclasses
 import multiprocessing as mp
+from datetime import datetime
 from functools import partial
 from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union
 
@@ -28,6 +29,9 @@ class XYResult:
     helicity_x: UFloat
     helicity_y: UFloat
     algorithm: Literal["wolff", "metropolis"]
+    start_time: datetime
+    end_time: datetime
+    total_seconds: float
 
     def to_json(self) -> Dict[str, Union[int, float, str, None]]:
         """Convert the ``XYResult`` to a JSON-compatible dict."""
@@ -35,6 +39,8 @@ class XYResult:
         for key, value in dataclasses.asdict(self).items():
             if isinstance(value, UFloat):
                 value = repr(value)
+            elif isinstance(value, datetime):
+                value = value.isoformat()
             json_dict[key] = value
         return json_dict
 
@@ -46,8 +52,13 @@ class XYResult:
         kwargs = {}
         for field in dataclasses.fields(XYResult):
             value = json_dict[field.name]
-            if isinstance(value, str) and "+/-" in value:
-                value = ufloat_fromstr(value)
+            if isinstance(value, str):
+                if "+/-" in value:
+                    value = ufloat_fromstr(value)
+                try:
+                    value = datetime.fromisoformat(value)
+                except:
+                    pass
             kwargs[field.name] = value
         return XYResult(**kwargs)
 
@@ -57,7 +68,7 @@ def get_site_neighbors_scales(
     row: int, col: int, nrows: int, ncols: int, periodic: bool = False
 ) -> Tuple[Tuple[int, int, int, int], Tuple[float, float, float, float]]:
     """Returns the four nearest neighbor indices for a given site, and a scale
-    value (either 0.0 or 1.0) indicating whether to include the corresponding bond.
+    value (either 0 or 1) indicating whether to include the corresponding bond.
     """
     col_right = (col + 1) % ncols
     col_left = (col - 1) % ncols
@@ -80,7 +91,7 @@ def get_all_neighbors_scales(
     nrows: int, ncols: int, periodic: bool = False
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Returns the four nearest neighbor indices for a all sites, and a scale
-    value (either 0.0 or 1.0) indicating whether to include the corresponding bond.
+    value (either 0 or 1) indicating whether to include the corresponding bond.
     """
     # (nrows, ncols, [col_right, col_left, row_up, row_down])
     neighbors = np.empty((nrows, ncols, 4), dtype=np.int64)
@@ -154,7 +165,7 @@ def run_n_metropolis_steps(
 
 
 @numba.njit(fastmath=True)
-def calculate_E(
+def calculate_energy(
     phases: np.ndarray,
     neighbors: np.ndarray,
     scales: np.ndarray,
@@ -238,7 +249,7 @@ def construct_wolff_cluster(
     visited: np.ndarray,
     temperature: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Recursively construct a cluster starting at a given site using the
+    """Recursively constructs a cluster starting at a given site using the
     Wolff algorithm, flipping spins as the cluster grows.
     """
 
@@ -247,7 +258,6 @@ def construct_wolff_cluster(
 
     S0 = np.exp(1j * phases[row, col])
     S0_dot_r = (S0 / r0).real
-    visited[row, col] = True
 
     col_right, col_left, row_up, row_down = neighbors[row, col]
     bonds = np.array(
@@ -321,6 +331,8 @@ def run_model(
     use_wolff: bool = True,
 ) -> XYResult:
 
+    start_time = datetime.now()
+
     if rng_seed is not None:
         np.random.seed(rng_seed)
 
@@ -361,7 +373,7 @@ def run_model(
                 metropolis_steps_per_pass, phases, neighbors, scales, temperature
             )
 
-        _energy[i] = calculate_E(phases, neighbors, scales)
+        _energy[i] = calculate_energy(phases, neighbors, scales)
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
@@ -393,6 +405,8 @@ def run_model(
     helicity_x = (1 / Nx) * (helicity_x_e - helicity_x_s2 / temperature)
     helicity_y = (1 / Ny) * (helicity_y_e - helicity_y_s2 / temperature)
 
+    end_time = datetime.now()
+
     result = XYResult(
         temperature=temperature,
         nrows=nrows,
@@ -409,6 +423,9 @@ def run_model(
         helicity_x=helicity_x,
         helicity_y=helicity_y,
         algorithm="wolff" if use_wolff else "metropolis",
+        start_time=start_time,
+        end_time=end_time,
+        total_seconds=(end_time - start_time).total_seconds(),
     )
 
     return result
@@ -426,6 +443,7 @@ def run_temperature_sweep(
     measure_passes: int = 10_000,
     periodic: bool = False,
     use_wolff: bool = True,
+    progress_bar: bool = True,
     rng_seed: Optional[int] = None,
 ) -> List[XYResult]:
 
@@ -443,7 +461,12 @@ def run_temperature_sweep(
         progress_bar=False,
     )
 
-    with mp.Pool(processes=num_cpus) as pool:
-        results = pool.map(func, temperatures)
+    if num_cpus > 1:
+        with mp.Pool(processes=num_cpus) as pool:
+            results = pool.map(func, temperatures)
+    else:
+        results = []
+        for temp in tqdm(temperatures, desc="Temperatures", disable=(not progress_bar)):
+            results.append(func(temp))
 
     return results
