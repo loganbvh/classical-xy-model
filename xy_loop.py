@@ -701,7 +701,7 @@ def main():
     parser.add_argument("--loop-center", type=float, nargs=3)
     parser.add_argument("--loop-radius", type=float)
     parser.add_argument("--loop-current", type=float, default=100)
-    parser.add_argument("--lattice_constant", type=float)
+    parser.add_argument("--lattice-constant", type=float)
     parser.add_argument("--pickup-loop-center", type=float, nargs=3, default=None)
     parser.add_argument("--pickup-loop-radius", type=float, default=3.0)
     parser.add_argument("--metropolis-steps-per-pass", type=int, default=None)

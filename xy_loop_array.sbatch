@@ -21,9 +21,10 @@ cp -u $0 $outdir/
 
 python $pyscript \
     --output-path=$outdir/results-$SLURM_ARRAY_TASK_ID.json \
-    --temperature=$(python -c "import numpy; print(numpy.linspace(0.01, 2.01, 201))[$SLURM_ARRAY_TASK_ID]") \
+    --temperature=$(python -c "import numpy; print(numpy.linspace(0.01, 2.01, 201)[$SLURM_ARRAY_TASK_ID])") \
     --nrows=50 \
     --ncols=100 \
+    --lattice-constant=1.2 \
     --loop-center 0 0 2 \
     --loop-radius=7.5 \
     --loop-current=100 \
