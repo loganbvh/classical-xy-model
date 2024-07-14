@@ -2,3 +2,4 @@ numba
 numpy
 tqdm
 uncertainties
+superscreen
