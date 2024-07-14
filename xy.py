@@ -46,7 +46,7 @@ class XYResult:
 
     @staticmethod
     def from_json(
-        json_dict: Dict[str, Union[int, float, str, UFloat, None]]
+        json_dict: Dict[str, Union[int, float, str, UFloat, datetime, None]]
     ) -> "XYResult":
         """Create an ``XYResult`` from a JSON-compatible dict"""
         kwargs = {}
@@ -74,6 +74,7 @@ def get_site_neighbors_scales(
     col_left = (col - 1) % ncols
     row_up = (row - 1) % nrows
     row_down = (row + 1) % nrows
+
     if periodic:
         col_right_scale = col_left_scale = row_up_scale = row_down_scale = 1.0
     else:
@@ -81,6 +82,7 @@ def get_site_neighbors_scales(
         col_left_scale = col > 0
         row_up_scale = row > 0
         row_down_scale = row < nrows - 1
+
     neighbors = col_right, col_left, row_up, row_down
     scales = col_right_scale, col_left_scale, row_up_scale, row_down_scale
     return neighbors, scales
@@ -253,18 +255,15 @@ def construct_wolff_cluster(
     Wolff algorithm, flipping spins as the cluster grows.
     """
 
-    if np.all(visited):
-        return phases, visited
-
     S0 = np.exp(1j * phases[row, col])
     S0_dot_r0 = (S0 / r0).real
 
     col_right, col_left, row_up, row_down = neighbors[row, col]
-    bonds = np.array(
+    nearest_neighbors = np.array(
         [(row, col_right), (row, col_left), (row_up, col), (row_down, col)]
     )
 
-    for k, (i, j) in enumerate(bonds):
+    for k, (i, j) in enumerate(nearest_neighbors):
         if visited[i, j] or (scales[row, col, k] == 0):
             continue
 
@@ -301,16 +300,19 @@ def run_wolff_step(
     nrows, ncols = phases.shape
     visited = np.zeros((nrows, ncols), dtype=numba.boolean)
 
+    # Pick initial site at random
     row = np.random.randint(0, nrows)
     col = np.random.randint(0, ncols)
     S = np.exp(1j * phases[row, col])
     r0 = np.exp(1j * 2 * np.pi * np.random.random())
 
+    # Reflect spin at initial site aboout the plane perpendicular to r0
     S_dot_r0 = (S / r0).real
     S -= 2 * S_dot_r0 * r0
     phases[row, col] = np.angle(S)
     visited[row, col] = True
 
+    # Build cluster starting from initial site
     phases, visited = construct_wolff_cluster(
         row, col, r0, phases, neighbors, scales, visited, temperature
     )
@@ -378,7 +380,7 @@ def run_model(
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
-        if True or periodic:
+        if periodic:
             ex, sx, ey, sy = calculate_helicity_periodic(phases)
         else:
             ex, sx, ey, sy = calculate_helicity_open(phases)
@@ -397,7 +399,7 @@ def run_model(
     helicity_y_e = ufloat(np.mean(_helicity_y_e), np.std(_helicity_y_e))
     helicity_y_s2 = ufloat(np.mean(_helicity_y_s2), np.std(_helicity_y_s2))
 
-    if True or periodic:
+    if periodic:
         Nx = Ny = phases.size
     else:
         Nx = nrows * (ncols - 1)
