@@ -212,32 +212,32 @@ def calculate_helicity_periodic(
     return ex, sx, ey, sy
 
 
-@numba.njit(fastmath=True)
-def calculate_helicity_open(phases: np.ndarray) -> Tuple[float, float, float, float]:
-    """Calculates the quantities needed to compute the helicity modulus
-    for a given configuration (with open boundary conditions).
-    """
+# @numba.njit(fastmath=True)
+# def calculate_helicity_open(phases: np.ndarray) -> Tuple[float, float, float, float]:
+#     """Calculates the quantities needed to compute the helicity modulus
+#     for a given configuration (with open boundary conditions).
+#     """
 
-    nrows, ncols = phases.shape
-    # stiffness_x
-    ex = 0.0
-    sx = 0.0
-    for i in range(nrows):
-        for j in range(ncols - 1):
-            delta_x = phases[i, j] - phases[i, j + 1]
-            ex += np.cos(delta_x)
-            sx += np.sin(delta_x)
+#     nrows, ncols = phases.shape
+#     # stiffness_x
+#     ex = 0.0
+#     sx = 0.0
+#     for i in range(nrows):
+#         for j in range(ncols - 1):
+#             delta_x = phases[i, j] - phases[i, j + 1]
+#             ex += np.cos(delta_x)
+#             sx += np.sin(delta_x)
 
-    # stiffness_y
-    ey = 0.0
-    sy = 0.0
-    for i in range(nrows - 1):
-        for j in range(ncols):
-            delta_y = phases[i, j] - phases[i + 1, j]
-            ey += np.cos(delta_y)
-            sy += np.sin(delta_y)
+#     # stiffness_y
+#     ey = 0.0
+#     sy = 0.0
+#     for i in range(nrows - 1):
+#         for j in range(ncols):
+#             delta_y = phases[i, j] - phases[i + 1, j]
+#             ey += np.cos(delta_y)
+#             sy += np.sin(delta_y)
 
-    return ex, sx, ey, sy
+#     return ex, sx, ey, sy
 
 
 @numba.njit(fastmath=True)
@@ -380,10 +380,7 @@ def run_model(
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
-        if periodic:
-            ex, sx, ey, sy = calculate_helicity_periodic(phases)
-        else:
-            ex, sx, ey, sy = calculate_helicity_open(phases)
+        ex, sx, ey, sy = calculate_helicity_periodic(phases)
         _helicity_x_e[i] = ex
         _helicity_x_s2[i] = sx**2
         _helicity_y_e[i] = ey

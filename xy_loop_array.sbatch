@@ -19,9 +19,13 @@ pyscript=$HOME/classical-xy-model/xy_loop.py
 cp -u $pyscript $outdir/
 cp -u $0 $outdir/
 
+temperature=$(python -c "import numpy; print(numpy.linspace(0.01, 2.01, 201)[$SLURM_ARRAY_TASK_ID])")
+J=$(python "$HOME/classical-xy-model/get_J.py --kBT-over-J0=$temperature --Tc=1.95 --kBTc-over-J0=1.5 --transparency=1.0")
+
 python $pyscript \
     --output-path=$outdir/results-$SLURM_ARRAY_TASK_ID.json \
-    --temperature=$(python -c "import numpy; print(numpy.linspace(0.01, 2.01, 201)[$SLURM_ARRAY_TASK_ID])") \
+    --temperature=$temperature \
+    --J=J \
     --nrows=50 \
     --ncols=100 \
     --lattice-constant=1.2 \

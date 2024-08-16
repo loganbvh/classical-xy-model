@@ -22,6 +22,7 @@ class XYResult:
     """A container for the results of a Monte Carlo simulation at a given temperature."""
 
     temperature: float
+    J: float
     nrows: int
     ncols: int
     hot_start: bool
@@ -166,6 +167,7 @@ def calculate_magnetization(phases: np.ndarray) -> float:
 @numba.njit(fastmath=True)
 def calculate_helicity_periodic(
     phases: np.ndarray,
+    J: float = 1.0,
 ) -> Tuple[float, float, float, float]:
     """Calculates the quantities needed to compute the helicity modulus
     for a given configuration (with periodic boundary conditions).
@@ -176,15 +178,17 @@ def calculate_helicity_periodic(
         for j in range(ncols):
             delta_x = phases[i, j] - phases[i, (j + 1) % ncols]
             delta_y = phases[i, j] - phases[(i + 1) % nrows, j]
-            ex += np.cos(delta_x)
-            sx += np.sin(delta_x)
-            ey += np.cos(delta_y)
-            sy += np.sin(delta_y)
+            ex += J * np.cos(delta_x)
+            sx += J * np.sin(delta_x)
+            ey += J * np.cos(delta_y)
+            sy += J * np.sin(delta_y)
     return ex, sx, ey, sy
 
 
 @numba.njit(fastmath=True)
-def calculate_helicity_open(phases: np.ndarray) -> Tuple[float, float, float, float]:
+def calculate_helicity_open(
+    phases: np.ndarray, J: float = 1.0
+) -> Tuple[float, float, float, float]:
     """Calculates the quantities needed to compute the helicity modulus
     for a given configuration (with open boundary conditions).
     """
@@ -196,8 +200,8 @@ def calculate_helicity_open(phases: np.ndarray) -> Tuple[float, float, float, fl
     for i in range(nrows):
         for j in range(ncols - 1):
             delta_x = phases[i, j] - phases[i, j + 1]
-            ex += np.cos(delta_x)
-            sx += np.sin(delta_x)
+            ex += J * np.cos(delta_x)
+            sx += J * np.sin(delta_x)
 
     # stiffness_y
     ey = 0.0
@@ -205,8 +209,8 @@ def calculate_helicity_open(phases: np.ndarray) -> Tuple[float, float, float, fl
     for i in range(nrows - 1):
         for j in range(ncols):
             delta_y = phases[i, j] - phases[i + 1, j]
-            ey += np.cos(delta_y)
-            sy += np.sin(delta_y)
+            ey += J * np.cos(delta_y)
+            sy += J * np.sin(delta_y)
 
     return ex, sx, ey, sy
 
@@ -266,6 +270,7 @@ def calculate_site_energy(
     row: int,
     col: int,
     site_phase: float,
+    J: float = 1.0,
 ) -> float:
     """Calculates the total energy of a given site with phase ``site_phase``."""
 
@@ -278,7 +283,7 @@ def calculate_site_energy(
     A3 = 0.5 * (A0[1] + A[row_up, col, 1])
     A4 = 0.5 * (A0[1] + A[row_down, col, 1])
 
-    E = -(
+    E = -J * (
         col_right_scale * np.cos(phases[row, col_right] - site_phase - A1)
         + col_left_scale * np.cos(phases[row, col_left] - site_phase + A2)
         + row_up_scale * np.cos(phases[row_up, col] - site_phase - A3)
@@ -295,6 +300,7 @@ def run_n_metropolis_steps(
     neighbors: np.ndarray,
     scales: np.ndarray,
     temperature: float,
+    J: float = 1.0,
 ) -> np.ndarray:
     """Performs ``n`` Metropolis updates and returns the resulting phases."""
     nrows, ncols = phases.shape
@@ -308,10 +314,10 @@ def run_n_metropolis_steps(
 
         # calculate E_new - E
         E_new = calculate_site_energy(
-            phases, A, neighbors, scales, row, col, site_phase=trial_phase
+            phases, A, neighbors, scales, row, col, site_phase=trial_phase, J=J
         )
         E_old = calculate_site_energy(
-            phases, A, neighbors, scales, row, col, site_phase=phases[row, col]
+            phases, A, neighbors, scales, row, col, site_phase=phases[row, col], J=J
         )
         delta_E = E_new - E_old
 
@@ -328,6 +334,7 @@ def calculate_energy(
     A: np.ndarray,
     neighbors: np.ndarray,
     scales: np.ndarray,
+    J: float = 1.0,
 ) -> float:
     """Calculates the average energy per site for a given configuration."""
     nrows, ncols = phases.shape
@@ -335,7 +342,7 @@ def calculate_energy(
     for row in range(nrows):
         for col in range(ncols):
             E += calculate_site_energy(
-                phases, A, neighbors, scales, row, col, phases[row, col]
+                phases, A, neighbors, scales, row, col, phases[row, col], J=J
             )
     return 0.5 * E / phases.size
 
@@ -504,6 +511,7 @@ def run_model(
     loop_center: Tuple[float, float, float],
     loop_radius: float,
     loop_current: float,
+    J: float = 1.0,
     lattice_constant: float = 1.0,
     pickup_loop_center: Optional[Tuple[float, float, float]] = None,
     pickup_loop_radius: float = 3.0,
@@ -555,7 +563,13 @@ def run_model(
         range(thermalize_passes), desc="Thermalizing", disable=(not progress_bar)
     ):
         phases = run_n_metropolis_steps(
-            metropolis_steps_per_pass, phases, A, neighbors, scales, temperature
+            metropolis_steps_per_pass,
+            phases,
+            A,
+            neighbors,
+            scales,
+            temperature,
+            J=J,
         )
 
     _energy = np.zeros(measure_passes)
@@ -569,7 +583,13 @@ def run_model(
 
     for i in tqdm(range(measure_passes), desc="Measuring", disable=(not progress_bar)):
         phases = run_n_metropolis_steps(
-            metropolis_steps_per_pass, phases, A, neighbors, scales, temperature
+            metropolis_steps_per_pass,
+            phases,
+            A,
+            neighbors,
+            scales,
+            temperature,
+            J=J,
         )
 
         _energy[i] = calculate_energy(phases, A, neighbors, scales)
@@ -577,9 +597,9 @@ def run_model(
         _magnetization[i] = M
         _magnetization2[i] = M**2
         if periodic:
-            ex, sx, ey, sy = calculate_helicity_periodic(phases)
+            ex, sx, ey, sy = calculate_helicity_periodic(phases, J=J)
         else:
-            ex, sx, ey, sy = calculate_helicity_open(phases)
+            ex, sx, ey, sy = calculate_helicity_open(phases, J=J)
         _helicity_x_e[i] = ex
         _helicity_x_s2[i] = sx**2
         _helicity_y_e[i] = ey
@@ -587,7 +607,7 @@ def run_model(
 
         if pickup_loop_center is not None:
             Ix, Iy = get_currents(phases, A)
-            currents = np.array([Ix, Iy]).transpose(1, 2, 0)
+            currents = J * np.array([Ix, Iy]).transpose(1, 2, 0)
             currents = currents.reshape((-1, 2)) * (1e-6 * lattice_constant)
             Bz = biot_savart_from_lattice(pl_points, bond_centers, currents)
             _squid_susc[i] = np.sum(Bz * pl_areas) / Phi_0 / loop_current
@@ -616,6 +636,7 @@ def run_model(
 
     result = XYResult(
         temperature=temperature,
+        J=J,
         nrows=nrows,
         ncols=ncols,
         hot_start=hot_start,
@@ -647,6 +668,7 @@ def run_temperature_sweep(
     loop_center: Tuple[float, float, float],
     loop_radius: float,
     loop_current: float,
+    J: float = 1.0,
     lattice_constant: float = 1.0,
     pickup_loop_center: Optional[Tuple[float, float, float]] = None,
     pickup_loop_radius: float = 3.0,
@@ -661,6 +683,7 @@ def run_temperature_sweep(
 
     func = partial(
         run_model,
+        J=J,
         nrows=nrows,
         ncols=ncols,
         loop_center=loop_center,
@@ -696,6 +719,7 @@ def main():
 
     parser.add_argument("--output-path", type=str)
     parser.add_argument("--temperature", type=float)
+    parser.add_argument("--J", type=float, default=1.0)
     parser.add_argument("--nrows", type=int)
     parser.add_argument("--ncols", type=int)
     parser.add_argument("--loop-center", type=float, nargs=3)
