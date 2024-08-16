@@ -599,10 +599,7 @@ def run_model(
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
-        if periodic:
-            ex, sx, ey, sy = calculate_helicity_periodic(phases, J=J)
-        else:
-            ex, sx, ey, sy = calculate_helicity_open(phases, J=J)
+        ex, sx, ey, sy = calculate_helicity_periodic(phases, J=J)
         _helicity_x_e[i] = ex
         _helicity_x_s2[i] = sx**2
         _helicity_y_e[i] = ey
@@ -626,14 +623,9 @@ def run_model(
     helicity_y_e = ufloat(np.mean(_helicity_y_e), np.std(_helicity_y_e))
     helicity_y_s2 = ufloat(np.mean(_helicity_y_s2), np.std(_helicity_y_s2))
 
-    if periodic:
-        Nx = Ny = phases.size
-    else:
-        Nx = nrows * (ncols - 1)
-        Ny = (nrows - 1) * ncols
-
-    helicity_x = (1 / Nx) * (helicity_x_e - helicity_x_s2 / temperature)
-    helicity_y = (1 / Ny) * (helicity_y_e - helicity_y_s2 / temperature)
+    Nx = Ny = phases.size
+    helicity_x = (1 / Nx) * (helicity_x_e - J * helicity_x_s2 / temperature)
+    helicity_y = (1 / Ny) * (helicity_y_e - J * helicity_y_s2 / temperature)
 
     end_time = datetime.now()
 
