@@ -20,7 +20,7 @@ cp -u $pyscript $outdir/
 cp -u $0 $outdir/
 
 temperature=$(python -c "import numpy; print(numpy.linspace(0.01, 2.01, 201)[$SLURM_ARRAY_TASK_ID])")
-J=$(python "$HOME/classical-xy-model/get_J.py --kBT-over-J0=$temperature --Tc=1.95 --kBTc-over-J0=1.5 --transparency=1.0")
+J=$(python $HOME/classical-xy-model/get_J.py --kBT-over-J0=$temperature --Tc=1.95 --kBTc-over-J0=1.5 --transparency=1.0)
 
 python $pyscript \
     --output-path=$outdir/results-$SLURM_ARRAY_TASK_ID.json \
@@ -37,8 +37,7 @@ python $pyscript \
     --thermalize-passes=100000 \
     --measure-passes=1000000 \
     --hot-start \
-    --periodic \
-    --progress-bar
+    --periodic
 
 # Move the stdout log to the results directory
 mv "slurm-${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out" $outdir
