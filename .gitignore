@@ -1,4 +1,5 @@
 data
+results
 *.ipynb
 
 .DS_Store
