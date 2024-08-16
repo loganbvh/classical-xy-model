@@ -25,7 +25,7 @@ J=$(python "$HOME/classical-xy-model/get_J.py --kBT-over-J0=$temperature --Tc=1.
 python $pyscript \
     --output-path=$outdir/results-$SLURM_ARRAY_TASK_ID.json \
     --temperature=$temperature \
-    --J=J \
+    --J=$J \
     --nrows=50 \
     --ncols=100 \
     --lattice-constant=1.2 \

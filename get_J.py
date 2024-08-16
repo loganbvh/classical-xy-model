@@ -6,9 +6,8 @@ import pint
 ureg = pint.UnitRegistry()
 
 
-def bcs_gap(T: float, Tc: float = 1.0, Delta0: float = 1.0, a: float = 1.0) -> float:
-    t = T / Tc
-    return Delta0 * np.tanh(np.pi * Tc / Delta0 * np.sqrt(a * (1 / t - 1)))
+def bcs_gap(T: float, Tc: float = 1.0, Delta0: float = 1.764, a: float = 1.0):
+    return Delta0 * np.tanh(np.pi / Delta0 * np.sqrt(a * (Tc / T - 1)))
 
 
 def Vc_KO(T: float, phi: float, D: float = 1.0, Tc: float = 1.95) -> float:

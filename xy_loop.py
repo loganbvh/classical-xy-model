@@ -22,7 +22,6 @@ class XYResult:
     """A container for the results of a Monte Carlo simulation at a given temperature."""
 
     temperature: float
-    J: float
     nrows: int
     ncols: int
     hot_start: bool
@@ -40,6 +39,7 @@ class XYResult:
     start_time: datetime
     end_time: datetime
     total_seconds: float
+    J: float = 1.0
 
     def to_json(self) -> Dict[str, Union[int, float, str, None]]:
         """Convert the ``XYResult`` to a JSON-compatible dict."""
@@ -59,7 +59,10 @@ class XYResult:
         """Create an ``XYResult`` from a JSON-compatible dict"""
         kwargs = {}
         for field in dataclasses.fields(XYResult):
-            value = json_dict[field.name]
+            try:
+                value = json_dict[field.name]
+            except KeyError:
+                continue
             if isinstance(value, str):
                 if "+/-" in value:
                     value = ufloat_fromstr(value)
