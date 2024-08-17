@@ -170,7 +170,6 @@ def calculate_magnetization(phases: np.ndarray) -> float:
 @numba.njit(fastmath=True)
 def calculate_helicity_periodic(
     phases: np.ndarray,
-    J: float = 1.0,
 ) -> Tuple[float, float, float, float]:
     """Calculates the quantities needed to compute the helicity modulus
     for a given configuration (with periodic boundary conditions).
@@ -181,41 +180,41 @@ def calculate_helicity_periodic(
         for j in range(ncols):
             delta_x = phases[i, j] - phases[i, (j + 1) % ncols]
             delta_y = phases[i, j] - phases[(i + 1) % nrows, j]
-            ex += J * np.cos(delta_x)
-            sx += J * np.sin(delta_x)
-            ey += J * np.cos(delta_y)
-            sy += J * np.sin(delta_y)
+            ex += np.cos(delta_x)
+            sx += np.sin(delta_x)
+            ey += np.cos(delta_y)
+            sy += np.sin(delta_y)
     return ex, sx, ey, sy
 
 
-@numba.njit(fastmath=True)
-def calculate_helicity_open(
-    phases: np.ndarray, J: float = 1.0
-) -> Tuple[float, float, float, float]:
-    """Calculates the quantities needed to compute the helicity modulus
-    for a given configuration (with open boundary conditions).
-    """
+# @numba.njit(fastmath=True)
+# def calculate_helicity_open(
+#     phases: np.ndarray, J: float = 1.0
+# ) -> Tuple[float, float, float, float]:
+#     """Calculates the quantities needed to compute the helicity modulus
+#     for a given configuration (with open boundary conditions).
+#     """
 
-    nrows, ncols = phases.shape
-    # stiffness_x
-    ex = 0.0
-    sx = 0.0
-    for i in range(nrows):
-        for j in range(ncols - 1):
-            delta_x = phases[i, j] - phases[i, j + 1]
-            ex += J * np.cos(delta_x)
-            sx += J * np.sin(delta_x)
+#     nrows, ncols = phases.shape
+#     # stiffness_x
+#     ex = 0.0
+#     sx = 0.0
+#     for i in range(nrows):
+#         for j in range(ncols - 1):
+#             delta_x = phases[i, j] - phases[i, j + 1]
+#             ex += J * np.cos(delta_x)
+#             sx += J * np.sin(delta_x)
 
-    # stiffness_y
-    ey = 0.0
-    sy = 0.0
-    for i in range(nrows - 1):
-        for j in range(ncols):
-            delta_y = phases[i, j] - phases[i + 1, j]
-            ey += J * np.cos(delta_y)
-            sy += J * np.sin(delta_y)
+#     # stiffness_y
+#     ey = 0.0
+#     sy = 0.0
+#     for i in range(nrows - 1):
+#         for j in range(ncols):
+#             delta_y = phases[i, j] - phases[i + 1, j]
+#             ey += J * np.cos(delta_y)
+#             sy += J * np.sin(delta_y)
 
-    return ex, sx, ey, sy
+#     return ex, sx, ey, sy
 
 
 @numba.njit
@@ -595,11 +594,11 @@ def run_model(
             J=J,
         )
 
-        _energy[i] = calculate_energy(phases, A, neighbors, scales)
+        _energy[i] = calculate_energy(phases, A, neighbors, scales, J=1)
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
-        ex, sx, ey, sy = calculate_helicity_periodic(phases, J=J)
+        ex, sx, ey, sy = calculate_helicity_periodic(phases)
         _helicity_x_e[i] = ex
         _helicity_x_s2[i] = sx**2
         _helicity_y_e[i] = ey
@@ -624,8 +623,8 @@ def run_model(
     helicity_y_s2 = ufloat(np.mean(_helicity_y_s2), np.std(_helicity_y_s2))
 
     Nx = Ny = phases.size
-    helicity_x = (1 / Nx) * (helicity_x_e - J * helicity_x_s2 / temperature)
-    helicity_y = (1 / Ny) * (helicity_y_e - J * helicity_y_s2 / temperature)
+    helicity_x = J * (1 / Nx) * (helicity_x_e - J * helicity_x_s2 / temperature)
+    helicity_y = J * (1 / Ny) * (helicity_y_e - J * helicity_y_s2 / temperature)
 
     end_time = datetime.now()
 

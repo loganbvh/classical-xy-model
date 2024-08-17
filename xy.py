@@ -15,6 +15,7 @@ class XYResult:
     """A container for the results of a Monte Carlo simulation at a given temperature."""
 
     temperature: float
+    J: float
     nrows: int
     ncols: int
     hot_start: bool
@@ -51,7 +52,10 @@ class XYResult:
         """Create an ``XYResult`` from a JSON-compatible dict"""
         kwargs = {}
         for field in dataclasses.fields(XYResult):
-            value = json_dict[field.name]
+            try:
+                value = json_dict[field.name]
+            except KeyError:
+                continue
             if isinstance(value, str):
                 if "+/-" in value:
                     value = ufloat_fromstr(value)
@@ -117,13 +121,14 @@ def calculate_site_energy(
     row: int,
     col: int,
     site_phase: float,
+    J: float = 1.0,
 ) -> float:
     """Calculates the total energy of a given site with phase ``site_phase``."""
 
     col_right, col_left, row_up, row_down = neighbors[row, col]
     col_right_scale, col_left_scale, row_up_scale, row_down_scale = scales[row, col]
 
-    E = -(
+    E = -J * (
         col_right_scale * np.cos(site_phase - phases[row, col_right])
         + col_left_scale * np.cos(site_phase - phases[row, col_left])
         + row_up_scale * np.cos(site_phase - phases[row_up, col])
@@ -139,6 +144,7 @@ def run_n_metropolis_steps(
     neighbors: np.ndarray,
     scales: np.ndarray,
     temperature: float,
+    J: float = 1.0,
 ) -> np.ndarray:
     """Performs ``n`` Metropolis updates and returns the resulting phases."""
     nrows, ncols = phases.shape
@@ -152,10 +158,22 @@ def run_n_metropolis_steps(
 
         # calculate E_new - E
         E_new = calculate_site_energy(
-            phases, neighbors, scales, row, col, site_phase=trial_phase
+            phases,
+            neighbors,
+            scales,
+            row,
+            col,
+            site_phase=trial_phase,
+            J=J,
         )
         E_old = calculate_site_energy(
-            phases, neighbors, scales, row, col, site_phase=phases[row, col]
+            phases,
+            neighbors,
+            scales,
+            row,
+            col,
+            site_phase=phases[row, col],
+            J=J,
         )
         delta_E = E_new - E_old
 
@@ -171,13 +189,14 @@ def calculate_energy(
     phases: np.ndarray,
     neighbors: np.ndarray,
     scales: np.ndarray,
+    J: float = 1.0,
 ) -> float:
     """Calculates the average energy per site for a given configuration."""
     nrows, ncols = phases.shape
     E = 0.0
     for row in range(nrows):
         for col in range(ncols):
-            E += calculate_site_energy(
+            E += J * calculate_site_energy(
                 phases, neighbors, scales, row, col, phases[row, col]
             )
     return 0.5 * E / phases.size
@@ -250,6 +269,7 @@ def construct_wolff_cluster(
     scales: np.ndarray,
     visited: np.ndarray,
     temperature: np.ndarray,
+    J: float = 1.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Recursively constructs a cluster starting at a given site using the
     Wolff algorithm, flipping spins as the cluster grows.
@@ -270,7 +290,7 @@ def construct_wolff_cluster(
         S = np.exp(1j * phases[i, j])
         S_dot_r0 = (S / r0).real
 
-        a = 2 / temperature * S0_dot_r0 * S_dot_r0
+        a = 2 / temperature * S0_dot_r0 * S_dot_r0 * J
         prob = (a < 0) * (1 - np.exp(a))
         if np.random.random() < prob:
             S -= 2 * S_dot_r0 * r0
@@ -286,6 +306,7 @@ def construct_wolff_cluster(
                 scales,
                 visited,
                 temperature,
+                J=J,
             )
 
     return phases, visited
@@ -293,7 +314,11 @@ def construct_wolff_cluster(
 
 @numba.njit(fastmath=True)
 def run_wolff_step(
-    phases: np.ndarray, neighbors: np.ndarray, scales: np.ndarray, temperature: float
+    phases: np.ndarray,
+    neighbors: np.ndarray,
+    scales: np.ndarray,
+    temperature: float,
+    J: float = 1.0,
 ) -> np.ndarray:
     """Performs a single Wolff update by constructing and flipping a cluster."""
 
@@ -314,13 +339,22 @@ def run_wolff_step(
 
     # Build cluster starting from initial site
     phases, visited = construct_wolff_cluster(
-        row, col, r0, phases, neighbors, scales, visited, temperature
+        row,
+        col,
+        r0,
+        phases,
+        neighbors,
+        scales,
+        visited,
+        temperature,
+        J=J,
     )
     return phases
 
 
 def run_model(
     temperature: float,
+    J: float,
     *,
     nrows: int,
     ncols: int,
@@ -354,10 +388,15 @@ def run_model(
         range(thermalize_passes), desc="Thermalizing", disable=(not progress_bar)
     ):
         if use_wolff:
-            phases = run_wolff_step(phases, neighbors, scales, temperature)
+            phases = run_wolff_step(phases, neighbors, scales, temperature, J=J)
         else:
             phases = run_n_metropolis_steps(
-                metropolis_steps_per_pass, phases, neighbors, scales, temperature
+                metropolis_steps_per_pass,
+                phases,
+                neighbors,
+                scales,
+                temperature,
+                J=J,
             )
 
     _energy = np.zeros(measure_passes)
@@ -370,13 +409,18 @@ def run_model(
 
     for i in tqdm(range(measure_passes), desc="Measuring", disable=(not progress_bar)):
         if use_wolff:
-            phases = run_wolff_step(phases, neighbors, scales, temperature)
+            phases = run_wolff_step(phases, neighbors, scales, temperature, J=J)
         else:
             phases = run_n_metropolis_steps(
-                metropolis_steps_per_pass, phases, neighbors, scales, temperature
+                metropolis_steps_per_pass,
+                phases,
+                neighbors,
+                scales,
+                temperature,
+                J=J,
             )
 
-        _energy[i] = calculate_energy(phases, neighbors, scales)
+        _energy[i] = calculate_energy(phases, neighbors, scales, J=J)
         M = calculate_magnetization(phases)
         _magnetization[i] = M
         _magnetization2[i] = M**2
@@ -402,13 +446,14 @@ def run_model(
         Nx = nrows * (ncols - 1)
         Ny = (nrows - 1) * ncols
 
-    helicity_x = (1 / Nx) * (helicity_x_e - helicity_x_s2 / temperature)
-    helicity_y = (1 / Ny) * (helicity_y_e - helicity_y_s2 / temperature)
+    helicity_x = J * (1 / Nx) * (helicity_x_e - J * helicity_x_s2 / temperature)
+    helicity_y = J * (1 / Ny) * (helicity_y_e - J * helicity_y_s2 / temperature)
 
     end_time = datetime.now()
 
     result = XYResult(
         temperature=temperature,
+        J=J,
         nrows=nrows,
         ncols=ncols,
         hot_start=hot_start,
@@ -445,6 +490,7 @@ def run_temperature_sweep(
     use_wolff: bool = True,
     progress_bar: bool = True,
     rng_seed: Optional[int] = None,
+    Js: Optional[Sequence[float]] = None,
 ) -> List[XYResult]:
 
     func = partial(
@@ -461,12 +507,17 @@ def run_temperature_sweep(
         progress_bar=False,
     )
 
+    if Js is None:
+        Js = np.ones(len(temperatures), dtype=float)
+
     if num_cpus > 1:
         with mp.Pool(processes=num_cpus) as pool:
-            results = pool.map(func, temperatures)
+            results = pool.starmap(func, list(zip(temperatures, Js)))
     else:
         results = []
-        for temp in tqdm(temperatures, desc="Temperatures", disable=(not progress_bar)):
-            results.append(func(temp))
+        for T, J in tqdm(
+            zip(temperatures, Js), desc="Temperatures", disable=(not progress_bar)
+        ):
+            results.append(func(T, J))
 
     return results

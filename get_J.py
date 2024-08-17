@@ -17,7 +17,24 @@ def Vc_KO(T: float, phi: float, D: float = 1.0, Tc: float = 1.95) -> float:
     fact = np.sqrt(1 - D * np.sin(phi / 2) ** 2)
     tanh = np.tanh((Delta / (2 * ureg("k_B") * T)).to_base_units().m * fact)
     Vc = (np.pi * Delta / (2 * ureg("e")) * np.sin(phi) / fact * tanh).to("mV")
-    return Vc.magnitude
+    return Vc
+
+
+def get_Vc(
+    kBT_over_J0: float,
+    Tc: float,
+    kBTc_over_J0: float,
+    transparency: float,
+    nphis: int = 201,
+) -> float:
+    phis = np.linspace(0, np.pi, nphis)
+    T = kBT_over_J0 / kBTc_over_J0 * Tc
+    if T >= Tc:
+        return 0.0
+
+    Vcs = [Vc_KO(T, phi, D=transparency, Tc=Tc).magnitude for phi in phis]
+    Vc = max(Vcs)
+    return Vc
 
 
 def main():
@@ -34,18 +51,10 @@ def main():
     with warnings.catch_warnings():
         warnings.filterwarnings(action="ignore")
 
-        phis = np.linspace(0, np.pi, 201)
-        Vc0s = [Vc_KO(1e-6, phi, D=args.transparency, Tc=args.Tc) for phi in phis]
-        Vc0 = max(Vc0s)
+        Vc0 = get_Vc(1e-6, args.Tc, args.kBTc_over_J0, args.transparency)
+        Vc = get_Vc(args.kBT_over_J0, args.Tc, args.kBTc_over_J0, args.transparency)
 
-        T = args.kBT_over_J0 / args.kBTc_over_J0 * args.Tc
-
-        if T >= args.Tc:
-            print(0.0)
-        else:
-            Vcs = [Vc_KO(T, phi, D=args.transparency, Tc=args.Tc) for phi in phis]
-            Vc = max(Vcs)
-            print(Vc / Vc0)
+        print(Vc / Vc0)
 
 
 if __name__ == "__main__":
