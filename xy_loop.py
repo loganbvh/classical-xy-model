@@ -35,11 +35,11 @@ class XYResult:
     susceptibility: UFloat
     helicity_x: UFloat
     helicity_y: UFloat
-    squid_susceptibility: UFloat
     start_time: datetime
     end_time: datetime
     total_seconds: float
     J: float = 1.0
+    squid_susceptibility: UFloat = ufloat(0, 0)
 
     def to_json(self) -> Dict[str, Union[int, float, str, None]]:
         """Convert the ``XYResult`` to a JSON-compatible dict."""
