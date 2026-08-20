@@ -47,7 +47,7 @@ class XYResult:
 
     @staticmethod
     def from_json(
-        json_dict: Dict[str, Union[int, float, str, UFloat, datetime, None]]
+        json_dict: Dict[str, Union[int, float, str, UFloat, datetime, None]],
     ) -> "XYResult":
         """Create an ``XYResult`` from a JSON-compatible dict"""
         kwargs = {}
@@ -196,7 +196,7 @@ def calculate_energy(
     E = 0.0
     for row in range(nrows):
         for col in range(ncols):
-            E += J * calculate_site_energy(
+            E += calculate_site_energy(
                 phases, neighbors, scales, row, col, phases[row, col]
             )
     return 0.5 * E / phases.size
